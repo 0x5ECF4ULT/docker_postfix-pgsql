@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  postfix:
+    image: 0x5ecf4ult/postfix-pgsql
+    volumes:
+      - $PWD/conf:/etc/postfix
+      - $PWD/log:/var/log/postfix
+      - $PWD/spool:/var/spool/postfix
+    ports:
+      - '25:25'

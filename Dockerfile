@@ -1,0 +1,40 @@
+FROM debian:10-slim as builder
+ARG version
+ARG INSTALL_ROOT=/postfix
+ARG POSTFIX_PACKAGE_DIR=/postfix-package
+
+RUN apt update && \
+    apt install -y make gcc postgresql-server-dev-all wget libdb-dev m4 && \
+    rm -f /var/cache/apt/archives/*.deb
+RUN wget http://cdn.postfix.johnriley.me/mirrors/postfix-release/official/postfix-${version}.tar.gz
+RUN tar xvf postfix-${version}.tar.gz
+
+WORKDIR /postfix-${version}
+RUN make tidy
+RUN make -f Makefile.init makefiles shared=yes dynamicmaps=yes \
+        'CCARGS=-DHAS_PGSQL -I/usr/include/postgresql' \
+        'AUXLIBS_PGSQL=-L/usr/lib -lpq'
+RUN make non-interactive-package install_root=${INSTALL_ROOT}
+
+RUN mkdir ${POSTFIX_PACKAGE_DIR} && \
+    cd ${INSTALL_ROOT} && \
+    find . \! -type d -print | xargs tar rf ${POSTFIX_PACKAGE_DIR}/outputfile && \
+    gzip ${POSTFIX_PACKAGE_DIR}/outputfile
+
+FROM debian:10-slim
+ARG POSTFIX_PACKAGE_DIR=/postfix-package
+
+COPY --from=builder /${POSTFIX_PACKAGE_DIR}/outputfile.gz /
+RUN umask 022 && \
+    gzip -d < outputfile.gz | (cd / ; tar xvpf -) && \
+    apt update && apt install -y inetutils-syslogd && \
+    rm -rf /var/cache/apt/archives
+
+RUN useradd postfix && groupadd postdrop
+RUN chown :postdrop /usr/sbin/postqueue /usr/sbin/postdrop && \
+    chmod g+s /usr/sbin/postqueue /usr/sbin/postdrop
+RUN mkdir /var/spool/postfix
+
+EXPOSE 25
+COPY docker-entrypoint.sh /
+ENTRYPOINT [ "/bin/bash", "docker-entrypoint.sh" ]
