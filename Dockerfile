@@ -1,5 +1,5 @@
 FROM debian:10-slim as builder
-ARG version
+ARG version=3.6.0
 ARG INSTALL_ROOT=/postfix
 ARG POSTFIX_PACKAGE_DIR=/postfix-package
 
